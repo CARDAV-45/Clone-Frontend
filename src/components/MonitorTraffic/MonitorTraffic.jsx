@@ -413,7 +413,7 @@ function MonitorTrafficLive() {
       <header className="monitor-toolbar">
         <div className="toolbar-group">
           <label>
-            Protocolo
+            Protocolo{' '}
             <select value={traffic.filters.protocol} onChange={handleProtocolChange}>
               {PROTOCOLS.map((protocol) => (
                 <option key={protocol} value={protocol}>
@@ -423,7 +423,7 @@ function MonitorTrafficLive() {
             </select>
           </label>
           <label>
-            Severidad
+            Severidad{' '}
             <select value={traffic.filters.severity} onChange={handleSeverityChange}>
               {SEVERITIES.map((severity) => (
                 <option key={severity} value={severity}>
@@ -433,7 +433,7 @@ function MonitorTrafficLive() {
             </select>
           </label>
           <label className="search-inline">
-            Buscar
+            Buscar{' '}
             <input
               type="search"
               placeholder="IP, puerto o texto"
@@ -530,7 +530,7 @@ function MonitorTrafficLive() {
       >
         <form id="create-incident-form" className="create-incident-form" onSubmit={handleCreateIncident}>
           <label>
-            Severidad
+            Severidad{' '}
             <select value={createSeverity} onChange={(event) => setCreateSeverity(event.target.value)}>
               <option value="critical">Crítica</option>
               <option value="high">Alta</option>
@@ -539,7 +539,7 @@ function MonitorTrafficLive() {
             </select>
           </label>
           <label>
-            Motivo / resumen
+            Motivo / resumen{' '}
             <textarea
               rows={3}
               value={createReason}
