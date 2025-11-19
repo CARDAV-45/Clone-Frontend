@@ -73,7 +73,7 @@ function Login({ params = {} }) {
   };
 
   const handleTotpInput = (event) => {
-    const nextValue = event.target.value.replace(/\D+/g, '').slice(0, 6);
+    const nextValue = event.target.value.replaceAll(/\D+/g, '').slice(0, 6);
     setTotpCode(nextValue);
     if (totpError) {
       setTotpError('');
