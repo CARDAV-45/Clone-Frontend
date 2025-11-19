@@ -22,17 +22,16 @@ function getPauseLabel(paused) {
 }
 
 function renderDetectionBadge(label, score, version) {
-  const hasData = (label && label.length > 0) || score !== undefined;
   const parts = [
     'Modelo',
     label || '—',
     version ? `· v${version}` : null,
-    score !== undefined ? `· score ${score}` : null,
+    score === undefined ? null : `· score ${score}`,
   ].filter(Boolean);
   const title = parts.join(' ');
   return (
     <span className="detection-badge" title={title}>
-      {label || '—'}{score !== undefined ? ` (${score})` : ''}
+      {label || '—'}{score === undefined ? '' : ` (${score})`}
     </span>
   );
 }
