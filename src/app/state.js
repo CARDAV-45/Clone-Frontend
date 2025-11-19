@@ -1,4 +1,5 @@
 import { createContext, createElement, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import PropTypes from 'prop-types';
 import {
   authStartGoogle as authStartGoogleApi,
   authFetchMe as authFetchMeApi,
@@ -1535,6 +1536,10 @@ export function AppProvider({ children }) {
     createElement(AppActionsContext.Provider, { value: actions }, children),
   );
 }
+
+AppProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+};
 
 export function useAppState() {
   const context = useContext(AppStateContext);
