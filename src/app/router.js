@@ -81,13 +81,13 @@ function matchRoute(hash) {
 }
 
 export function navigate(to) {
-  if (typeof window === 'undefined') return;
-  window.location.hash = to;
+  if (typeof globalThis.window === 'undefined') return;
+  globalThis.window.location.hash = to;
 }
 
 export function useRoute() {
   const [route, setRoute] = useState(() =>
-    matchRoute(typeof window !== 'undefined' ? window.location.hash : '#/'),
+    matchRoute(typeof globalThis.window !== 'undefined' ? globalThis.window.location.hash : '#/'),
   );
   const [Component, setComponent] = useState(null);
   const [error, setError] = useState(null);
@@ -116,13 +116,13 @@ export function useRoute() {
 
   useEffect(() => {
     const handler = () => {
-      setRoute(matchRoute(window.location.hash));
+      setRoute(matchRoute(globalThis.window.location.hash));
     };
-    window.addEventListener('hashchange', handler);
-    if (!window.location.hash) {
-      window.location.hash = DEFAULT_ROUTE.path;
+    globalThis.window.addEventListener('hashchange', handler);
+    if (!globalThis.window.location.hash) {
+      globalThis.window.location.hash = DEFAULT_ROUTE.path;
     }
-    return () => window.removeEventListener('hashchange', handler);
+    return () => globalThis.window.removeEventListener('hashchange', handler);
   }, []);
 
   return { ...route, Component, error };

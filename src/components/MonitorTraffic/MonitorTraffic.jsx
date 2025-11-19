@@ -284,7 +284,7 @@ function MonitorTrafficLive() {
     if (!listRef.current) return;
     scrollTopRef.current = listRef.current.scrollTop;
     if (rafRef.current) return;
-    rafRef.current = window.requestAnimationFrame(() => {
+    rafRef.current = globalThis.window.requestAnimationFrame(() => {
       const start = Math.floor(scrollTopRef.current / ROW_HEIGHT);
       const end = start + VISIBLE_ROWS + 4;
       setVisibleWindow({ start, end });
