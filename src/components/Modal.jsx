@@ -22,19 +22,13 @@ function Modal({ open, title, description, children, actions, onClose }) {
   if (!open) return null;
 
   return (
-    <div
-      className="modal-backdrop"
-      role="button"
-      aria-label="Cerrar modal"
-      tabIndex={0}
-      onClick={() => onClose?.()}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClose?.();
-        }
-      }}
-    >
+    <>
+      <button
+        type="button"
+        className="modal-backdrop"
+        aria-label="Cerrar"
+        onClick={() => onClose?.()}
+      />
       <div
         className="modal"
         role="dialog"
@@ -43,8 +37,6 @@ function Modal({ open, title, description, children, actions, onClose }) {
         aria-describedby={description ? 'modal-description' : undefined}
         tabIndex={-1}
         ref={dialogRef}
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
       >
         <header className="modal-header">
           <h2 id="modal-title">{title}</h2>
@@ -65,7 +57,7 @@ function Modal({ open, title, description, children, actions, onClose }) {
           ×
         </button>
       </div>
-    </div>
+    </>
   );
 }
 
