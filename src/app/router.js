@@ -145,29 +145,6 @@ export function getRouteHash(key, params = {}) {
   }
 }
 
-// Helper to check if user has admin role
-function isAdmin(user) {
-  if (!user) return false;
-  // Check if user object has role or authorities
-  const role = user.role;
-  const authorities = user.authorities;
-  
-  // Check role string
-  if (typeof role === 'string' && (role === 'ROLE_ADMIN' || role === 'ADMIN' || role === 'admin')) {
-    return true;
-  }
-  
-  // Check authorities array
-  if (Array.isArray(authorities)) {
-    return authorities.some(auth => {
-      const authStr = typeof auth === 'string' ? auth : auth?.authority || '';
-      return authStr === 'ROLE_ADMIN' || authStr === 'ADMIN';
-    });
-  }
-  
-  return false;
-}
-
 function RequireAuthGate({ render, adminOnly = false }) {
   const { auth } = useAppState();
   const { authHandleReturn } = useAppActions();
