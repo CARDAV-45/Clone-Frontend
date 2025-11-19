@@ -13,102 +13,75 @@ const VISIBLE_ROWS = 14;
 const PROTOCOLS = ['ALL', 'TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS', 'DNS', 'SSL'];
 const SEVERITIES = ['ALL', 'critical', 'high', 'medium', 'low'];
 
-// --- Helpers -------------------------------------------------------------
+// Helpers (simple, pure) -------------------------------------------------
 function filterPackets(packets, filters) {
   const { protocol, severity, search } = filters;
   const normalized = (search || '').trim().toLowerCase();
-  return packets.filter((packet) => {
-    const protocolMatch = protocol === 'ALL' || packet.proto === protocol;
-    const severityMatch = severity === 'ALL' || packet.severity === severity;
-    const searchMatch = !normalized
-      || `${packet.src}:${packet.srcPort}`.toLowerCase().includes(normalized)
-      || `${packet.dst}:${packet.dstPort}`.toLowerCase().includes(normalized)
-      || (packet.info || '').toLowerCase().includes(normalized)
-      || (packet.incidentId || '').toLowerCase().includes(normalized);
-    return protocolMatch && severityMatch && searchMatch;
-  });
+  return packets.filter(p => (
+    (protocol === 'ALL' || p.proto === protocol) &&
+    (severity === 'ALL' || p.severity === severity) &&
+    (!normalized ||
+      `${p.src}:${p.srcPort}`.toLowerCase().includes(normalized) ||
+      `${p.dst}:${p.dstPort}`.toLowerCase().includes(normalized) ||
+      (p.info || '').toLowerCase().includes(normalized) ||
+      (p.incidentId || '').toLowerCase().includes(normalized))
+  ));
 }
 
-function usePollingConnection(traffic, settings, appendTrafficBatch, requestRecentTraffic, setConnectionStatus, lastTimestampRef) {
-  useEffect(() => {
-    setConnectionStatus('conectando');
-    const tick = async () => {
-      try {
-        const since = lastTimestampRef.current;
-        const packets = await requestRecentTraffic({ since, limit: 100 });
-        if (packets?.length) {
-          appendTrafficBatch(packets);
-          const latest = packets[packets.length - 1];
-          lastTimestampRef.current = new Date(latest.timestamp).getTime();
-        }
-      } catch {
-        setConnectionStatus('error');
-      }
-    };
-    setConnectionStatus('polling');
-    tick();
-    const timer = setInterval(tick, traffic.pollingInterval);
-    return () => clearInterval(timer);
-  }, [traffic.pollingInterval, traffic.mode, settings.apiBaseUrl, appendTrafficBatch, requestRecentTraffic, setConnectionStatus, lastTimestampRef]);
-}
-
-// --- Presentational components ------------------------------------------
-function DetectionBadge({ label, score, version }) {
-  if (!label && score === undefined) return '—';
-  const title = `Modelo ${label || '—'}${version ? ` · v${version}` : ''}${score !== undefined ? ` · score ${score}` : ''}`;
+function PayloadViewer({ detail }) {
+  if (!detail?.payloadHex) return <p className="traffic-placeholder">Sin payload disponible.</p>;
+  const hex = detail.payloadHex.slice(0, 2048);
+  const ascii = detail.payloadAscii ? detail.payloadAscii.slice(0, 512) : '';
   return (
-    <span className="detection-badge" title={title}>
-      {label || '—'}{score !== undefined ? ` (${score})` : ''}
-    </span>
+    <div className="payload-viewer">
+      <div>
+        <h4>Hex</h4>
+        <pre>{hex}</pre>
+      </div>
+      <div>
+        <h4>ASCII</h4>
+        <pre>{ascii}</pre>
+      </div>
+    </div>
   );
 }
 
-function PacketDetail({ packet, detail, loading, detectionModelLabel, detectionModelScore, detectionModelVersion, incidents, selectedIncidentId, setSelectedIncidentId, linkPacketToIncident, handleViewIncident, addToast, renderPayload }) {
-  if (!packet) {
-    return <div className="traffic-placeholder">Selecciona un paquete para ver más información.</div>;
-  }
-  const handleLink = () => {
-    if (!packet || !selectedIncidentId) return;
-    linkPacketToIncident(packet.id, selectedIncidentId, packet.severity);
-    addToast({ title: 'Paquete vinculado', description: `Se marcó relación con ${selectedIncidentId}.`, tone: 'success' });
-  };
+function PacketDetail({ packet, detail, detailLoading, detectionModelLabel, detectionModelScore, detectionModelVersion, incidents, selectedIncidentId, setSelectedIncidentId, handleLinkToIncident, handleViewIncident }) {
+  if (detailLoading) return <Loader label="Cargando detalle" />;
+  if (!packet) return <div className="traffic-placeholder">Selecciona un paquete para ver más información.</div>;
   return (
-    <aside className="traffic-detail" aria-live="polite">
-      <header>
-        <h3>Detalle del paquete</h3>
-        <span>{packet.id} · {packet.proto}</span>
-      </header>
-      {loading ? <Loader label="Cargando detalle" /> : (
-        <div className="detail-content">
-          <dl className="detail-grid">
-            <div><dt>Timestamp</dt><dd><time dateTime={packet.timestamp}>{new Date(packet.timestamp).toLocaleString()}</time></dd></div>
-            <div><dt>Origen</dt><dd>{packet.src}:{packet.srcPort}</dd></div>
-            <div><dt>Destino</dt><dd>{packet.dst}:{packet.dstPort}</dd></div>
-            <div><dt>Severidad</dt><dd className={`severity-tag ${packet.severity}`}>{packet.severity}</dd></div>
-            <div><dt>Longitud</dt><dd>{packet.length} bytes</dd></div>
-            <div><dt>Detección</dt><dd><DetectionBadge label={detectionModelLabel} score={detectionModelScore} version={detectionModelVersion} /></dd></div>
-            {detail?.layers && (
-              <div><dt>Capas</dt><dd><ul>{detail.layers.map((layer, i) => <li key={`${layer.type}-${i}`}>{`${layer.type} ${layer.protocol || ''}`}</li>)}</ul></dd></div>
-            )}
-          </dl>
-          {renderPayload()}
-          <div className="detail-graph"><TrafficCanvas packets={detail?.packets || []} /></div>
-          <div className="detail-actions">
-            <label>
-              Vincular a incidente
-              <select value={selectedIncidentId} onChange={(e) => setSelectedIncidentId(e.target.value)}>
-                <option value="">Selecciona incidente</option>
-                {incidents.map((inc) => <option key={inc.id} value={inc.id}>{inc.id} · {inc.type || inc.status}</option>)}
-              </select>
-            </label>
-            <div className="detail-buttons">
-              <button type="button" className="btn subtle" onClick={handleLink} disabled={!selectedIncidentId}>Marcar relacionado</button>
-              <button type="button" className="btn warn" onClick={handleViewIncident} disabled={!packet}>Ver en incidentes</button>
-            </div>
-          </div>
+    <div className="detail-content">
+      <dl className="detail-grid">
+        <div><dt>Timestamp</dt><dd><time dateTime={packet.timestamp}>{new Date(packet.timestamp).toLocaleString()}</time></dd></div>
+        <div><dt>Origen</dt><dd>{packet.src}:{packet.srcPort}</dd></div>
+        <div><dt>Destino</dt><dd>{packet.dst}:{packet.dstPort}</dd></div>
+        <div><dt>Severidad</dt><dd className={`severity-tag ${packet.severity}`}>{packet.severity}</dd></div>
+        <div><dt>Longitud</dt><dd>{packet.length} bytes</dd></div>
+        <div><dt>Detección</dt><dd>{(detectionModelLabel || detectionModelScore !== undefined) ? (
+          <span className="detection-badge" title={`Modelo ${detectionModelLabel || '—'}${detectionModelVersion ? ` · v${detectionModelVersion}` : ''}${detectionModelScore !== undefined ? ` · score ${detectionModelScore}` : ''}`}>
+            {detectionModelLabel || '—'}{detectionModelScore !== undefined ? ` (${detectionModelScore})` : ''}
+          </span>
+        ) : '—'}</dd></div>
+        {detail?.layers && (
+          <div><dt>Capas</dt><dd><ul>{detail.layers.map((layer, i) => <li key={`${layer.type}-${i}`}>{`${layer.type} ${layer.protocol || ''}`}</li>)}</ul></dd></div>
+        )}
+      </dl>
+      <PayloadViewer detail={detail} />
+      <div className="detail-graph"><TrafficCanvas packets={traffic.packets} /></div>
+      <div className="detail-actions">
+        <label>
+          Vincular a incidente
+          <select value={selectedIncidentId} onChange={(e) => setSelectedIncidentId(e.target.value)}>
+            <option value="">Selecciona incidente</option>
+            {incidents.map(inc => <option key={inc.id} value={inc.id}>{inc.id} · {inc.type || inc.status}</option>)}
+          </select>
+        </label>
+        <div className="detail-buttons">
+          <button type="button" className="btn subtle" onClick={handleLinkToIncident} disabled={!selectedIncidentId}>Marcar relacionado</button>
+          <button type="button" className="btn warn" onClick={handleViewIncident} disabled={!packet}>Ver en incidentes</button>
         </div>
-      )}
-    </aside>
+      </div>
+    </div>
   );
 }
 
@@ -500,21 +473,25 @@ function MonitorTrafficLive() {
           ) : null}
         </div>
 
-        <PacketDetail
-          packet={selectedPacket}
-          detail={detail}
-          loading={detailLoading}
-          detectionModelLabel={detectionModelLabel}
-          detectionModelScore={detectionModelScore}
-          detectionModelVersion={detectionModelVersion}
-          incidents={incidents}
-          selectedIncidentId={selectedIncidentId}
-          setSelectedIncidentId={setSelectedIncidentId}
-          linkPacketToIncident={linkPacketToIncident}
-          handleViewIncident={handleViewIncident}
-          addToast={addToast}
-          renderPayload={renderPayload}
-        />
+        <aside className="traffic-detail" aria-live="polite">
+          <header>
+            <h3>Detalle del paquete</h3>
+            {selectedPacket ? <span>{selectedPacket.id} · {selectedPacket.proto}</span> : <span>Selecciona un paquete para ver detalle</span>}
+          </header>
+          <PacketDetail
+            packet={selectedPacket}
+            detail={detail}
+            detailLoading={detailLoading}
+            detectionModelLabel={detectionModelLabel}
+            detectionModelScore={detectionModelScore}
+            detectionModelVersion={detectionModelVersion}
+            incidents={incidents}
+            selectedIncidentId={selectedIncidentId}
+            setSelectedIncidentId={setSelectedIncidentId}
+            handleLinkToIncident={handleLinkToIncident}
+            handleViewIncident={handleViewIncident}
+          />
+        </aside>
       </div>
 
       <Modal
