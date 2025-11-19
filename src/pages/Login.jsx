@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import { useAppActions, useAppState } from '../app/state.js';
 import { getRouteHash, navigate } from '../app/router.js';
 import Modal from '../components/Modal.jsx';
@@ -165,5 +166,11 @@ function Login({ params = {} }) {
     </div>
   );
 }
+
+Login.propTypes = {
+  params: PropTypes.shape({
+    query: PropTypes.string,
+  }),
+};
 
 export default Login;
