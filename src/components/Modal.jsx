@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
 
 function Modal({ open, title, description, children, actions, onClose }) {
   const dialogRef = useRef(null);
@@ -56,3 +57,12 @@ function Modal({ open, title, description, children, actions, onClose }) {
 }
 
 export default Modal;
+
+Modal.propTypes = {
+  open: PropTypes.bool.isRequired,
+  title: PropTypes.string.isRequired,
+  description: PropTypes.string,
+  children: PropTypes.node,
+  actions: PropTypes.node,
+  onClose: PropTypes.func,
+};

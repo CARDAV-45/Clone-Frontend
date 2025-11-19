@@ -1,4 +1,5 @@
 import { createElement, useEffect, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import Loader from '../components/Loader.jsx';
 import { useAppActions, useAppState, isAdmin } from './state.js';
 
@@ -192,3 +193,8 @@ function RequireAuthGate({ render, adminOnly = false }) {
 export function requireAuth(render, adminOnly = false) {
   return createElement(RequireAuthGate, { render, adminOnly });
 }
+
+RequireAuthGate.propTypes = {
+  render: PropTypes.func.isRequired,
+  adminOnly: PropTypes.bool,
+};
