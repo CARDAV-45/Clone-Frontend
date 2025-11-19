@@ -13,6 +13,97 @@ const VISIBLE_ROWS = 14;
 const PROTOCOLS = ['ALL', 'TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS', 'DNS', 'SSL'];
 const SEVERITIES = ['ALL', 'critical', 'high', 'medium', 'low'];
 
+function getModeToggleLabel(mode) {
+  return mode === 'ws' ? 'Cambiar a polling' : 'Cambiar a realtime';
+}
+
+function getPauseLabel(paused) {
+  return paused ? 'Reanudar' : 'Pausar';
+}
+
+function renderDetectionBadge(label, score, version) {
+  if (!label && score === undefined) return '—';
+  const title = `Modelo ${label || '—'}${version ? ` · v${version}` : ''}${score !== undefined ? ` · score ${score}` : ''}`;
+  return (
+    <span className="detection-badge" title={title}>
+      {label || '—'}{score !== undefined ? ` (${score})` : ''}
+    </span>
+  );
+}
+
+function renderDetail(
+  selectedPacket,
+  detailLoading,
+  detail,
+  detectionModelLabel,
+  detectionModelScore,
+  detectionModelVersion,
+  incidents,
+  selectedIncidentId,
+  setSelectedIncidentId,
+  handleLinkToIncident,
+  handleViewIncident
+) {
+  if (detailLoading) return <Loader label="Cargando detalle" />;
+  if (!selectedPacket) return <div className="traffic-placeholder">Selecciona un paquete para ver más información.</div>;
+
+  return (
+    <div className="detail-content">
+      <dl className="detail-grid">
+        <div>
+          <dt>Timestamp</dt>
+          <dd><time dateTime={selectedPacket.timestamp}>{new Date(selectedPacket.timestamp).toLocaleString()}</time></dd>
+        </div>
+        <div><dt>Origen</dt><dd>{selectedPacket.src}:{selectedPacket.srcPort}</dd></div>
+        <div><dt>Destino</dt><dd>{selectedPacket.dst}:{selectedPacket.dstPort}</dd></div>
+        <div><dt>Severidad</dt><dd className={`severity-tag ${selectedPacket.severity}`}>{selectedPacket.severity}</dd></div>
+        <div><dt>Longitud</dt><dd>{selectedPacket.length} bytes</dd></div>
+        <div><dt>Detección</dt><dd>{renderDetectionBadge(detectionModelLabel, detectionModelScore, detectionModelVersion)}</dd></div>
+        {detail?.layers && (
+          <div>
+            <dt>Capas</dt>
+            <dd>
+              <ul>
+                {detail.layers.map((layer, index) => (
+                  <li key={`${layer.type}-${index}`}>{`${layer.type} ${layer.protocol || ''}`}</li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {detail?.payloadHex ? (
+        <div className="payload-viewer">
+          <div>
+            <h4>Hex</h4>
+            <pre>{detail.payloadHex.slice(0, 2048)}</pre>
+          </div>
+            <div>
+              <h4>ASCII</h4>
+              <pre>{(detail.payloadAscii || '').slice(0, 512)}</pre>
+            </div>
+        </div>
+      ) : <p className="traffic-placeholder">Sin payload disponible.</p>}
+      <div className="detail-graph"><TrafficCanvas packets={detail?.packets || []} /></div>
+      <div className="detail-actions">
+        <label>
+          Vincular a incidente
+          <select value={selectedIncidentId} onChange={(e) => setSelectedIncidentId(e.target.value)}>
+            <option value="">Selecciona incidente</option>
+            {incidents.map((incident) => (
+              <option key={incident.id} value={incident.id}>{incident.id} · {incident.type || incident.status}</option>
+            ))}
+          </select>
+        </label>
+        <div className="detail-buttons">
+          <button type="button" className="btn subtle" onClick={handleLinkToIncident} disabled={!selectedIncidentId}>Marcar relacionado</button>
+          <button type="button" className="btn warn" onClick={handleViewIncident} disabled={!selectedPacket}>Ver en incidentes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MonitorTraffic() {
   // Enable monitor only if the env var explicitly enables it
   const monitorEnabled = import.meta?.env?.VITE_MONITOR_ENABLED === 'true';
@@ -233,6 +324,11 @@ function MonitorTrafficLive() {
   const paddingTop = start * ROW_HEIGHT;
   const paddingBottom = Math.max(filteredPackets.length - end, 0) * ROW_HEIGHT;
 
+  // Derived labels
+  const modeToggleLabel = getModeToggleLabel(traffic.mode);
+  const pauseLabel = getPauseLabel(traffic.paused);
+  const emptyList = filteredPackets.length === 0;
+
   const handleSelectPacket = (packet) => {
     selectTrafficPacket(packet.id, packet.src || packet.dst);
   };
@@ -365,9 +461,7 @@ function MonitorTrafficLive() {
           <span className="status-indicator" data-status={connectionStatus}>
             {connectionStatus}
           </span>
-          <button type="button" className="btn subtle" onClick={handleModeToggle}>
-            {traffic.mode === 'ws' ? 'Cambiar a polling' : 'Cambiar a realtime'}
-          </button>
+          <button type="button" className="btn subtle" onClick={handleModeToggle}>{modeToggleLabel}</button>
           {isStreaming && (
             <button type="button" className="btn danger" onClick={handleStopStream}>
               🛑 Detener tráfico
@@ -381,9 +475,7 @@ function MonitorTrafficLive() {
               <option value={5000}>5s</option>
             </select>
           </label>
-          <button type="button" className="btn subtle" onClick={handlePauseToggle}>
-            {traffic.paused ? 'Reanudar' : 'Pausar'}
-          </button>
+          <button type="button" className="btn subtle" onClick={handlePauseToggle}>{pauseLabel}</button>
           <button
             type="button"
             className="btn primary"
@@ -409,109 +501,26 @@ function MonitorTrafficLive() {
             />
           ))}
           <div style={{ height: paddingBottom }} aria-hidden="true" />
-          {!filteredPackets.length ? (
-            <div className="traffic-placeholder">Sin paquetes que coincidan con los filtros.</div>
-          ) : null}
+          {emptyList && <div className="traffic-placeholder">Sin paquetes que coincidan con los filtros.</div>}
         </div>
 
         <aside className="traffic-detail" aria-live="polite">
           <header>
             <h3>Detalle del paquete</h3>
-            {selectedPacket ? (
-              <span>
-                {selectedPacket.id} · {selectedPacket.proto}
-              </span>
-            ) : (
-              <span>Selecciona un paquete para ver detalle</span>
-            )}
+            {selectedPacket ? <span>{selectedPacket.id} · {selectedPacket.proto}</span> : <span>Selecciona un paquete para ver detalle</span>}
           </header>
-          {detailLoading ? (
-            <Loader label="Cargando detalle" />
-          ) : selectedPacket ? (
-            <div className="detail-content">
-              <dl className="detail-grid">
-                <div>
-                  <dt>Timestamp</dt>
-                  <dd>
-                    <time dateTime={selectedPacket.timestamp}>{new Date(selectedPacket.timestamp).toLocaleString()}</time>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Origen</dt>
-                  <dd>
-                    {selectedPacket.src}:{selectedPacket.srcPort}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Destino</dt>
-                  <dd>
-                    {selectedPacket.dst}:{selectedPacket.dstPort}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Severidad</dt>
-                  <dd className={`severity-tag ${selectedPacket.severity}`}>{selectedPacket.severity}</dd>
-                </div>
-                <div>
-                  <dt>Longitud</dt>
-                  <dd>{selectedPacket.length} bytes</dd>
-                </div>
-                <div>
-                  <dt>Detección</dt>
-                  <dd>
-                    {detectionModelLabel || detectionModelScore !== undefined ? (
-                      <span className="detection-badge" title={`Modelo ${detectionModelLabel || '—'}${
-                        detectionModelVersion ? ` · v${detectionModelVersion}` : ''
-                      }${detectionModelScore !== undefined ? ` · score ${detectionModelScore}` : ''}`}>
-                        {detectionModelLabel || '—'}
-                        {detectionModelScore !== undefined ? ` (${detectionModelScore})` : ''}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </dd>
-                </div>
-                {detail?.layers ? (
-                  <div>
-                    <dt>Capas</dt>
-                    <dd>
-                      <ul>
-                        {detail.layers.map((layer, index) => (
-                          <li key={`${layer.type}-${index}`}>{`${layer.type} ${layer.protocol || ''}`}</li>
-                        ))}
-                      </ul>
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-              {renderPayload()}
-              <div className="detail-graph">
-                <TrafficCanvas packets={traffic.packets} />
-              </div>
-              <div className="detail-actions">
-                <label>
-                  Vincular a incidente
-                  <select value={selectedIncidentId} onChange={(event) => setSelectedIncidentId(event.target.value)}>
-                    <option value="">Selecciona incidente</option>
-                    {incidents.map((incident) => (
-                      <option key={incident.id} value={incident.id}>
-                        {incident.id} · {incident.type || incident.status}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="detail-buttons">
-                  <button type="button" className="btn subtle" onClick={handleLinkToIncident} disabled={!selectedIncidentId}>
-                    Marcar relacionado
-                  </button>
-                  <button type="button" className="btn warn" onClick={handleViewIncident} disabled={!selectedPacket}>
-                    Ver en incidentes
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="traffic-placeholder">Selecciona un paquete para ver más información.</div>
+          {renderDetail(
+            selectedPacket,
+            detailLoading,
+            detail,
+            detectionModelLabel,
+            detectionModelScore,
+            detectionModelVersion,
+            incidents,
+            selectedIncidentId,
+            setSelectedIncidentId,
+            handleLinkToIncident,
+            handleViewIncident
           )}
         </aside>
       </div>
