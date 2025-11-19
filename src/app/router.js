@@ -81,13 +81,13 @@ function matchRoute(hash) {
 }
 
 export function navigate(to) {
-  if (typeof globalThis.window === 'undefined') return;
+  if (globalThis.window === undefined) return;
   globalThis.window.location.hash = to;
 }
 
 export function useRoute() {
   const [route, setRoute] = useState(() =>
-    matchRoute(typeof globalThis.window !== 'undefined' ? globalThis.window.location.hash : '#/'),
+    matchRoute(globalThis.window !== undefined ? globalThis.window.location.hash : '#/'),
   );
   const [Component, setComponent] = useState(null);
   const [error, setError] = useState(null);
