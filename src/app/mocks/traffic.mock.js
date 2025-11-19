@@ -13,7 +13,7 @@ const toHex = (value) => Array.from(textEncoder.encode(value)).map((byte) => byt
 const fromHex = (hex) => {
   if (!hex) return '';
   const pairs = hex.match(/.{1,2}/g) || [];
-  const bytes = new Uint8Array(pairs.map((pair) => parseInt(pair, 16)));
+  const bytes = new Uint8Array(pairs.map((pair) => Number.parseInt(pair, 16)));
   return textDecoder.decode(bytes);
 };
 
@@ -124,7 +124,6 @@ const startSocketLoop = () => {
 };
 
 export function createMockTrafficSocket() {
-  let isOpen = false;
 
   const socket = {
     readyState: 0,
@@ -134,7 +133,6 @@ export function createMockTrafficSocket() {
         clearInterval(socketTimer);
         socketTimer = null;
       }
-      isOpen = false;
       socket.readyState = 3;
     },
     send() {},
@@ -147,7 +145,6 @@ export function createMockTrafficSocket() {
   };
 
   setTimeout(() => {
-    isOpen = true;
     socket.readyState = 1;
     listeners.add(socket._handleMessage);
     startSocketLoop();
