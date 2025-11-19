@@ -12,6 +12,53 @@ const ROW_HEIGHT = 46;
 const VISIBLE_ROWS = 14;
 const PROTOCOLS = ['ALL', 'TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS', 'DNS', 'SSL'];
 const SEVERITIES = ['ALL', 'critical', 'high', 'medium', 'low'];
+// Helper to filter packets based on protocol, severity and search criteria
+function filterPackets(packets, filters) {
+  const { protocol, severity, search } = filters;
+  const normalized = (search || '').trim().toLowerCase();
+  return packets.filter((packet) => {
+    const protocolMatch = protocol === 'ALL' || packet.proto === protocol;
+    const severityMatch = severity === 'ALL' || packet.severity === severity;
+    const searchMatch = !normalized
+      || `${packet.src}:${packet.srcPort}`.toLowerCase().includes(normalized)
+      || `${packet.dst}:${packet.dstPort}`.toLowerCase().includes(normalized)
+      || (packet.info || '').toLowerCase().includes(normalized)
+      || (packet.incidentId || '').toLowerCase().includes(normalized);
+    return protocolMatch && severityMatch && searchMatch;
+  });
+}
+
+// Hook for managing traffic polling connection
+function useTrafficConnection(traffic, settings, destroyConnections, appendTrafficBatch, requestRecentTraffic, lastTimestampRef, setConnectionStatus) {
+  useEffect(() => {
+    setConnectionStatus('conectando');
+    destroyConnections();
+
+    const tick = async () => {
+      try {
+        const since = lastTimestampRef.current;
+        const packets = await requestRecentTraffic({ since, limit: 100 });
+        if (packets?.length) {
+          appendTrafficBatch(packets);
+          const latest = packets[packets.length - 1];
+          lastTimestampRef.current = new Date(latest.timestamp).getTime();
+        }
+      } catch (error) {
+        setConnectionStatus('error');
+      }
+    };
+
+    setConnectionStatus('polling');
+    tick();
+    const pollTimer = setInterval(tick, traffic.pollingInterval);
+
+    return () => {
+      destroyConnections();
+      clearInterval(pollTimer);
+    };
+  }, [traffic.mode, settings.apiBaseUrl, traffic.pollingInterval, destroyConnections, appendTrafficBatch, requestRecentTraffic, lastTimestampRef, setConnectionStatus]);
+}
+
 
 function MonitorTraffic() {
   // Enable monitor only if the env var explicitly enables it
@@ -156,32 +203,7 @@ function MonitorTrafficLive() {
     }
   }, []);
 
-  useEffect(() => {
-    setConnectionStatus('conectando');
-    destroyConnections();
-
-    const tick = async () => {
-      try {
-        const since = lastTimestampRef.current;
-        const packets = await requestRecentTraffic({ since, limit: 100 });
-        if (packets?.length) {
-          appendTrafficBatch(packets);
-          const latest = packets[packets.length - 1];
-          lastTimestampRef.current = new Date(latest.timestamp).getTime();
-        }
-      } catch (error) {
-        setConnectionStatus('error');
-      }
-    };
-
-    // Always use polling mode (WebSocket removed)
-    setConnectionStatus('polling');
-    tick();
-    pollTimerRef.current = setInterval(tick, traffic.pollingInterval);
-
-    return destroyConnections;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [traffic.mode, settings.apiBaseUrl, traffic.pollingInterval]);
+  useTrafficConnection(traffic, settings, destroyConnections, appendTrafficBatch, requestRecentTraffic, lastTimestampRef, setConnectionStatus);
 
   useEffect(() => () => destroyConnections(), [destroyConnections]);
 
@@ -213,20 +235,10 @@ function MonitorTrafficLive() {
     }
   }, [traffic.filters.protocol, traffic.filters.severity, traffic.filters.search]);
 
-  const filteredPackets = useMemo(() => {
-    const { protocol, severity, search } = traffic.filters;
-    const normalized = (search || '').trim().toLowerCase();
-    return traffic.packets.filter((packet) => {
-      const protocolMatch = protocol === 'ALL' || packet.proto === protocol;
-      const severityMatch = severity === 'ALL' || packet.severity === severity;
-      const searchMatch = !normalized
-        || `${packet.src}:${packet.srcPort}`.toLowerCase().includes(normalized)
-        || `${packet.dst}:${packet.dstPort}`.toLowerCase().includes(normalized)
-        || (packet.info || '').toLowerCase().includes(normalized)
-        || (packet.incidentId || '').toLowerCase().includes(normalized);
-      return protocolMatch && severityMatch && searchMatch;
-    });
-  }, [traffic.packets, traffic.filters]);
+  const filteredPackets = useMemo(
+    () => filterPackets(traffic.packets, traffic.filters),
+    [traffic.packets, traffic.filters]
+  );
 
   const { start, end } = visibleWindow;
   const visiblePackets = filteredPackets.slice(start, end);
