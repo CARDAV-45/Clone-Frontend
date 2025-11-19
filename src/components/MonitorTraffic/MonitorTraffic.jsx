@@ -22,8 +22,14 @@ function getPauseLabel(paused) {
 }
 
 function renderDetectionBadge(label, score, version) {
-  if (!label && score === undefined) return '—';
-  const title = `Modelo ${label || '—'}${version ? ` · v${version}` : ''}${score !== undefined ? ` · score ${score}` : ''}`;
+  const hasData = (label && label.length > 0) || score !== undefined;
+  const parts = [
+    'Modelo',
+    label || '—',
+    version ? `· v${version}` : null,
+    score !== undefined ? `· score ${score}` : null,
+  ].filter(Boolean);
+  const title = parts.join(' ');
   return (
     <span className="detection-badge" title={title}>
       {label || '—'}{score !== undefined ? ` (${score})` : ''}
@@ -31,19 +37,18 @@ function renderDetectionBadge(label, score, version) {
   );
 }
 
-function renderDetail(
-  selectedPacket,
-  detailLoading,
-  detail,
-  detectionModelLabel,
-  detectionModelScore,
-  detectionModelVersion,
-  incidents,
-  selectedIncidentId,
-  setSelectedIncidentId,
-  handleLinkToIncident,
-  handleViewIncident
-) {
+function renderDetail(props) {
+  const {
+    selectedPacket,
+    detailLoading,
+    detail,
+    detectionInfo,
+    incidents,
+    selectedIncidentId,
+    setSelectedIncidentId,
+    handleLinkToIncident,
+    handleViewIncident,
+  } = props;
   if (detailLoading) return <Loader label="Cargando detalle" />;
   if (!selectedPacket) return <div className="traffic-placeholder">Selecciona un paquete para ver más información.</div>;
 
@@ -58,7 +63,7 @@ function renderDetail(
         <div><dt>Destino</dt><dd>{selectedPacket.dst}:{selectedPacket.dstPort}</dd></div>
         <div><dt>Severidad</dt><dd className={`severity-tag ${selectedPacket.severity}`}>{selectedPacket.severity}</dd></div>
         <div><dt>Longitud</dt><dd>{selectedPacket.length} bytes</dd></div>
-        <div><dt>Detección</dt><dd>{renderDetectionBadge(detectionModelLabel, detectionModelScore, detectionModelVersion)}</dd></div>
+        <div><dt>Detección</dt><dd>{renderDetectionBadge(detectionInfo.label, detectionInfo.score, detectionInfo.version)}</dd></div>
         {detail?.layers && (
           <div>
             <dt>Capas</dt>
@@ -78,16 +83,16 @@ function renderDetail(
             <h4>Hex</h4>
             <pre>{detail.payloadHex.slice(0, 2048)}</pre>
           </div>
-            <div>
-              <h4>ASCII</h4>
-              <pre>{(detail.payloadAscii || '').slice(0, 512)}</pre>
-            </div>
+          <div>
+            <h4>ASCII</h4>
+            <pre>{(detail.payloadAscii || '').slice(0, 512)}</pre>
+          </div>
         </div>
       ) : <p className="traffic-placeholder">Sin payload disponible.</p>}
       <div className="detail-graph"><TrafficCanvas packets={detail?.packets || []} /></div>
       <div className="detail-actions">
         <label>
-          Vincular a incidente
+          Vincular a incidente{' '}
           <select value={selectedIncidentId} onChange={(e) => setSelectedIncidentId(e.target.value)}>
             <option value="">Selecciona incidente</option>
             {incidents.map((incident) => (
@@ -403,25 +408,6 @@ function MonitorTrafficLive() {
     setCreateModalOpen(true);
   };
 
-  const renderPayload = () => {
-    if (!detail?.payloadHex) {
-      return <p className="traffic-placeholder">Sin payload disponible.</p>;
-    }
-    const hex = detail.payloadHex.slice(0, 2048);
-    const ascii = detail.payloadAscii ? detail.payloadAscii.slice(0, 512) : '';
-    return (
-      <div className="payload-viewer">
-        <div>
-          <h4>Hex</h4>
-          <pre>{hex}</pre>
-        </div>
-        <div>
-          <h4>ASCII</h4>
-          <pre>{ascii}</pre>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <section className="monitor-traffic" aria-label="Monitor de tráfico en tiempo real">
@@ -468,7 +454,7 @@ function MonitorTrafficLive() {
             </button>
           )}
           <label>
-            Muestreo
+            Muestreo{' '}
             <select value={traffic.pollingInterval} onChange={(event) => setTrafficPollingInterval(Number(event.target.value))}>
               <option value={1000}>1s</option>
               <option value={2000}>2s</option>
@@ -509,19 +495,21 @@ function MonitorTrafficLive() {
             <h3>Detalle del paquete</h3>
             {selectedPacket ? <span>{selectedPacket.id} · {selectedPacket.proto}</span> : <span>Selecciona un paquete para ver detalle</span>}
           </header>
-          {renderDetail(
+          {renderDetail({
             selectedPacket,
             detailLoading,
             detail,
-            detectionModelLabel,
-            detectionModelScore,
-            detectionModelVersion,
+            detectionInfo: {
+              label: detectionModelLabel,
+              score: detectionModelScore,
+              version: detectionModelVersion,
+            },
             incidents,
             selectedIncidentId,
             setSelectedIncidentId,
             handleLinkToIncident,
-            handleViewIncident
-          )}
+            handleViewIncident,
+          })}
         </aside>
       </div>
 
